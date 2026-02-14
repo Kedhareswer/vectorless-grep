@@ -63,6 +63,25 @@ export const FigureIcon = ({ size = 14, ...props }: IconProps) => (
   </svg>
 );
 
+export const SectionIcon = ({ size = 14, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+    style={{ color: "#FBBF24", ...props.style }}
+  >
+    <path d="M3 7h18" />
+    <path d="M3 12h12" />
+    <path d="M3 17h8" />
+  </svg>
+);
+
 export const DocumentIcon = ({ size = 14, ...props }: IconProps) => (
   <svg
     width={size}

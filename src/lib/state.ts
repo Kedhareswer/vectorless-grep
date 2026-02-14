@@ -101,10 +101,18 @@ export const useVectorlessStore = create<VectorlessState>((set) => ({
     }),
   setLeftPaneWidth: (leftPaneWidth) => set({ leftPaneWidth }),
   setCenterView: (centerView) => set({ centerView }),
-  setTree: (tree) => {
-    const activeNodeId = tree.find((node) => node.parentId === null)?.id ?? null;
-    set({ tree, activeNodeId, indexingStatus: "complete" });
-  },
+  setTree: (tree) =>
+    set((state) => {
+      const preservedActiveNodeId = state.activeNodeId && tree.some((node) => node.id === state.activeNodeId)
+        ? state.activeNodeId
+        : null;
+      const fallbackRootNodeId = tree.find((node) => node.parentId === null)?.id ?? null;
+      return {
+        tree,
+        activeNodeId: preservedActiveNodeId ?? fallbackRootNodeId,
+        indexingStatus: "complete",
+      };
+    }),
   setNodeDetail: (nodeDetail) => set({ nodeDetail }),
   // Fix: only update activeNodeId if the trace has a concrete node ref,
   // otherwise preserve the user's current tree selection.

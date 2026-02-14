@@ -263,7 +263,7 @@ fn parse_pptx(file_path: &Path) -> AppResult<NormalizedPayload> {
         let mut lines = text.lines();
         let heading = lines
             .next()
-            .map(|l| clean_heading(l))
+            .map(clean_pptx_heading)
             .filter(|l| !l.is_empty())
             .unwrap_or_else(|| format!("Slide {}", i + 1));
         let body: String = lines.collect::<Vec<_>>().join("\n").trim().to_string();
@@ -323,6 +323,13 @@ fn parse_image(file_path: &Path) -> AppResult<NormalizedPayload> {
 struct Section {
     heading: String,
     paragraphs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockKind {
+    Paragraph,
+    Table,
+    Figure,
 }
 
 /// Split raw text into sections using heading heuristics.
@@ -464,18 +471,36 @@ fn build_hierarchy(
         });
 
         for (para_idx, para_text) in section.paragraphs.into_iter().enumerate() {
+            let kind = classify_block(&para_text);
+            let node_type = match kind {
+                BlockKind::Paragraph => "Paragraph",
+                BlockKind::Table => "Table",
+                BlockKind::Figure => "Figure",
+            };
+            let title = match kind {
+                BlockKind::Paragraph => format!("\u{00b6} {}", para_idx + 1),
+                BlockKind::Table => format!("Table {}", para_idx + 1),
+                BlockKind::Figure => format!("Figure {}", para_idx + 1),
+            };
             let para_id = format!("p-{}", Uuid::new_v4());
             nodes.push(SidecarNode {
                 id: para_id.clone(),
                 parent_id: Some(sec_id.clone()),
-                node_type: "Paragraph".to_string(),
-                title: format!("\u{00b6} {}", para_idx + 1),
+                node_type: node_type.to_string(),
+                title,
                 text: para_text,
                 page_start: None,
                 page_end: None,
                 ordinal_path: format!("{}.{}", sec_idx + 1, para_idx + 1),
                 bbox: Value::Null,
-                metadata: serde_json::json!({ "parser": "native" }),
+                metadata: serde_json::json!({
+                    "parser": "native",
+                    "kind": match kind {
+                        BlockKind::Paragraph => "paragraph",
+                        BlockKind::Table => "markdown_table",
+                        BlockKind::Figure => "markdown_image",
+                    }
+                }),
             });
             edges.push(SidecarEdge {
                 from: sec_id.clone(),
@@ -534,6 +559,81 @@ fn looks_like_heading(para: &str) -> bool {
 /// Strip markdown `#` prefixes and trim.
 fn clean_heading(heading: &str) -> String {
     heading.trim_start_matches('#').trim().to_string()
+}
+
+fn clean_pptx_heading(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.starts_with("<!--") && trimmed.ends_with("-->") {
+        let inner = trimmed
+            .trim_start_matches("<!--")
+            .trim_end_matches("-->")
+            .trim();
+        return clean_heading(inner);
+    }
+    clean_heading(trimmed)
+}
+
+fn classify_block(text: &str) -> BlockKind {
+    let value = text.trim();
+    if value.is_empty() {
+        return BlockKind::Paragraph;
+    }
+    if looks_like_figure_block(value) {
+        return BlockKind::Figure;
+    }
+    if looks_like_markdown_table(value) || looks_like_tsv_table(value) {
+        return BlockKind::Table;
+    }
+    BlockKind::Paragraph
+}
+
+fn looks_like_figure_block(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("<img") || lower.contains("data:image/") {
+        return true;
+    }
+    if let Some(start) = text.find("![") {
+        if let Some(open) = text[start..].find("](") {
+            if let Some(close) = text[start + open + 2..].find(')') {
+                let url = &text[start + open + 2..start + open + 2 + close];
+                let url_lower = url.to_ascii_lowercase();
+                return url_lower.starts_with("data:image/")
+                    || url_lower.ends_with(".png")
+                    || url_lower.ends_with(".jpg")
+                    || url_lower.ends_with(".jpeg")
+                    || url_lower.ends_with(".webp")
+                    || url_lower.ends_with(".gif")
+                    || url_lower.ends_with(".svg");
+            }
+        }
+    }
+    false
+}
+
+fn looks_like_markdown_table(text: &str) -> bool {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if lines.len() < 2 || !lines[0].contains('|') {
+        return false;
+    }
+    let separator = lines[1].replace('|', "").replace(':', "").replace('-', "");
+    lines[1].contains('-') && separator.trim().is_empty()
+}
+
+fn looks_like_tsv_table(text: &str) -> bool {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if lines.len() < 2 {
+        return false;
+    }
+    let tabbed = lines.iter().filter(|line| line.contains('\t')).count();
+    tabbed >= 2 && (tabbed as f64 / lines.len() as f64) >= 0.8
 }
 
 /// Split text on blank lines into chunks up to CHUNK_SIZE.

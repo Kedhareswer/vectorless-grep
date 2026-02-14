@@ -152,6 +152,25 @@ pub struct GetTreeResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DocumentPreviewBlock {
+    pub id: String,
+    pub document_id: String,
+    pub parent_id: Option<String>,
+    pub node_type: NodeType,
+    pub title: String,
+    pub text: String,
+    pub ordinal_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetDocumentPreviewResponse {
+    pub document_id: String,
+    pub blocks: Vec<DocumentPreviewBlock>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetNodeResponse {
     pub node: DocNodeDetail,
 }

@@ -34,5 +34,27 @@ export function nodeIcon(nodeType: string): string {
 
 export function depthForOrdinal(ordinalPath: string): number {
   if (ordinalPath === "root") return 0;
-  return ordinalPath.split(".").length - 1;
+  return ordinalPath.split(".").length;
+}
+
+export function compareOrdinalPath(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a === "root") return -1;
+  if (b === "root") return 1;
+
+  const parseParts = (value: string): number[] =>
+    value
+      .split(".")
+      .map((part) => Number.parseInt(part, 10))
+      .filter((part) => Number.isFinite(part));
+
+  const aParts = parseParts(a);
+  const bParts = parseParts(b);
+  const max = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < max; i += 1) {
+    const av = aParts[i] ?? -1;
+    const bv = bParts[i] ?? -1;
+    if (av !== bv) return av - bv;
+  }
+  return a.localeCompare(b);
 }

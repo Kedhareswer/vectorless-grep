@@ -90,6 +90,7 @@ pub fn run() {
             commands::documents::get_tree,
             commands::documents::get_project_tree,
             commands::documents::get_node,
+            commands::documents::get_document_preview,
             commands::documents::get_graph_layout,
             commands::documents::save_graph_layout,
             commands::documents::export_markdown,

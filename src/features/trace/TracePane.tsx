@@ -1,5 +1,6 @@
 import { formatLatency } from "../../lib/formatters";
 import type { AnswerRecord, DocNodeSummary, ReasoningRun, ReasoningStep } from "../../lib/types";
+import { useWorkspaceChrome } from "../navigation/WorkspaceChromeContext";
 import { AnswerCard } from "../answer/AnswerCard";
 
 interface TracePaneProps {
@@ -45,6 +46,7 @@ export function TracePane({
   onRerun,
   onToggleView,
 }: TracePaneProps) {
+  const { documents } = useWorkspaceChrome();
   const onSelectCitationNode = (nodeId: string): boolean => {
     const exists = tree.some((node) => node.id === nodeId);
     if (exists) {
@@ -52,6 +54,11 @@ export function TracePane({
     }
     return exists;
   };
+
+  const nodeById = new Map(tree.map((item) => [item.id, item]));
+  const hasDocuments = documents.length > 0;
+  const hasRunData = steps.length > 0 || !!answer || !!run;
+  const showQueryCard = hasRunData && queryText.trim().length > 0;
 
   return (
     <section className="pane trace-pane">
@@ -66,10 +73,12 @@ export function TracePane({
         </div>
       </header>
 
-      <article className="query-card">
-        <span className="query-kicker">User Query</span>
-        <p>{queryText.trim() || "No query."}</p>
-      </article>
+      {showQueryCard ? (
+        <article className="query-card">
+          <span className="query-kicker">User Query</span>
+          <p>{queryText.trim()}</p>
+        </article>
+      ) : null}
 
       {run && run.status !== "running" ? (
         <div className="run-summary">
@@ -101,86 +110,100 @@ export function TracePane({
       ) : null}
 
       <div className="trace-timeline">
-        {steps.map((step) => (
-          <article
-            key={`${step.runId}-${step.idx}`}
-            className={`trace-card ${stepTypeClass(step.stepType)}`}
-          >
-            <div className="trace-meta">
-              <span className="step-type">
-                STEP {String(step.idx).padStart(2, "0")} &middot; {step.stepType.replaceAll("_", " ")}
-              </span>
-              <span className="timing-badge">{formatLatency(step.latencyMs)}</span>
-            </div>
-            <p className="trace-thought">
-              <strong>Thought:</strong> {step.thought}
-            </p>
-            {step.action ? (
-              <>
-                <p className="trace-action">
-                  <strong>Action:</strong>
-                </p>
-                <pre className="trace-snippet"><code>{step.action}</code></pre>
-              </>
-            ) : null}
-            {step.observation ? (
-              <p className="trace-observation">
-                <strong>Observation:</strong> {step.observation}
-              </p>
-            ) : null}
-            <div className="trace-footer">
-              {step.confidence >= 0.7 ? (
-                <span className="score-chip">
-                  Score: {step.confidence.toFixed(2)}
-                </span>
-              ) : (
-                <span className={confidenceChipClass(step.confidence)}>
-                  Score: {step.confidence.toFixed(2)}
-                </span>
-              )}
-              {step.nodeRefs[0] ? (
-                <button
-                  className="link-btn"
-                  type="button"
-                  onClick={() => onSelectNode(step.nodeRefs[0]!)}
-                >
-                  Focus {step.nodeRefs[0]}
-                </button>
-              ) : null}
-            </div>
-          </article>
-        ))}
-        {steps.length === 0 ? (
-          <div className="trace-empty">
-            <p>No trace.</p>
+        {!hasDocuments ? (
+          <div className="trace-empty-state">
+            <h3>Get Started</h3>
+            <p>Create a project and upload files to get started.</p>
+          </div>
+        ) : null}
+        {hasDocuments && !hasRunData ? (
+          <div className="trace-empty-state">
+            <h3>Ask Your First Query</h3>
+            <p>Ask a question to generate a grounded answer from your uploaded documents.</p>
           </div>
         ) : null}
 
-        <AnswerCard answer={answer} onSelectCitationNode={onSelectCitationNode} />
+        {hasRunData ? (
+          <div className="timeline-stream">
+            {steps.map((step) => {
+            const firstNodeRef = step.nodeRefs[0];
+            const nodeTitle = firstNodeRef ? (nodeById.get(firstNodeRef)?.title || firstNodeRef) : null;
+            return (
+              <article
+                key={`${step.runId}-${step.idx}`}
+                className={`timeline-step ${stepTypeClass(step.stepType)}`}
+              >
+                <span className="timeline-marker" aria-hidden="true" />
+                <div className="timeline-step-main">
+                  <div className="timeline-step-header">
+                    <span className="timeline-step-index">STEP {String(step.idx).padStart(2, "0")}</span>
+                    <span className="timeline-step-name">{step.stepType.replaceAll("_", " ")}</span>
+                    <span className="timeline-step-latency">{formatLatency(step.latencyMs)}</span>
+                  </div>
+                  <div className="timeline-step-card">
+                    <p className="trace-thought">{step.thought}</p>
+                    {step.observation ? (
+                      <p className="trace-observation">{step.observation}</p>
+                    ) : null}
+                    {step.action ? (
+                      <pre className="trace-snippet"><code>{step.action}</code></pre>
+                    ) : null}
+                    <div className="trace-footer">
+                      {nodeTitle ? (
+                        <button
+                          className="timeline-node-chip"
+                          type="button"
+                          onClick={() => onSelectNode(firstNodeRef!)}
+                        >
+                          Found: {nodeTitle}
+                        </button>
+                      ) : <span />}
+                      {step.confidence >= 0.7 ? (
+                        <span className="score-chip">
+                          Score: {step.confidence.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className={confidenceChipClass(step.confidence)}>
+                          Score: {step.confidence.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+            })}
+          </div>
+        ) : null}
+        {answer ? (
+          <AnswerCard answer={answer} onSelectCitationNode={onSelectCitationNode} />
+        ) : null}
 
-        <div className="trace-actions">
-          <button type="button" className="rerun-btn" onClick={onRerun} disabled={running}>
-            Re-run Trace
-          </button>
-          <button
-            type="button"
-            className="download-btn"
-            onClick={() => {
-              const blob = new Blob(
-                [JSON.stringify({ run, steps, answer }, null, 2)],
-                { type: "application/json" },
-              );
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `trace-${run?.id?.slice(0, 8) ?? "export"}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-          >
-            Download Trace
-          </button>
-        </div>
+        {hasRunData ? (
+          <div className="trace-actions">
+            <button type="button" className="rerun-btn" onClick={onRerun} disabled={running}>
+              Re-run Trace
+            </button>
+            <button
+              type="button"
+              className="download-btn"
+              onClick={() => {
+                const blob = new Blob(
+                  [JSON.stringify({ run, steps, answer }, null, 2)],
+                  { type: "application/json" },
+                );
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `trace-${run?.id?.slice(0, 8) ?? "export"}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download Trace
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <form

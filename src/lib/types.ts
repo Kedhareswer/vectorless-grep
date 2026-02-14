@@ -47,6 +47,16 @@ export interface DocNodeDetail extends DocNodeSummary {
   metadataJson: Record<string, unknown>;
 }
 
+export interface DocumentPreviewBlock {
+  id: string;
+  documentId: string;
+  parentId: string | null;
+  nodeType: NodeType;
+  title: string;
+  text: string;
+  ordinalPath: string;
+}
+
 export interface ReasoningRun {
   id: string;
   projectId: string;

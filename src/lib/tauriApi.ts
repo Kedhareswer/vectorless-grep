@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type {
   DocNodeDetail,
   DocNodeSummary,
+  DocumentPreviewBlock,
   DocumentSummary,
   GraphNodePosition,
   IngestProgressEvent,
@@ -66,6 +67,14 @@ export async function getTree(
 export async function getNode(nodeId: string): Promise<DocNodeDetail> {
   const result = await invoke<{ node: DocNodeDetail }>("get_node", { nodeId });
   return result.node;
+}
+
+export async function getDocumentPreview(documentId: string): Promise<DocumentPreviewBlock[]> {
+  const result = await invoke<{ documentId: string; blocks: DocumentPreviewBlock[] }>(
+    "get_document_preview",
+    { documentId },
+  );
+  return result.blocks;
 }
 
 export async function runReasoningQuery(

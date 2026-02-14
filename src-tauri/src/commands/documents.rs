@@ -8,9 +8,10 @@ use crate::{
     core::{
         errors::{AppError, AppResult},
         types::{
-            DeleteDocumentResponse, ExportMarkdownResponse, GetGraphLayoutResponse, GetNodeResponse,
-            GetTreeResponse, GraphNodePosition, IngestDocumentResponse, IngestProgressEvent,
-            ListDocumentsResponse, OpenDocumentResponse, SaveGraphLayoutResponse,
+            DeleteDocumentResponse, DocumentPreviewBlock, ExportMarkdownResponse, GetDocumentPreviewResponse,
+            GetGraphLayoutResponse, GetNodeResponse, GetTreeResponse, GraphNodePosition,
+            IngestDocumentResponse, IngestProgressEvent, ListDocumentsResponse, OpenDocumentResponse,
+            SaveGraphLayoutResponse,
         },
     },
     db::repositories::documents,
@@ -211,6 +212,31 @@ pub async fn get_project_tree(
 pub async fn get_node(state: State<'_, AppState>, node_id: String) -> AppResult<GetNodeResponse> {
     let node = documents::get_node(state.db.pool(), &node_id).await?;
     Ok(GetNodeResponse { node })
+}
+
+#[tauri::command]
+pub async fn get_document_preview(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> AppResult<GetDocumentPreviewResponse> {
+    let blocks = documents::get_document_preview(state.db.pool(), &document_id)
+        .await?
+        .into_iter()
+        .map(|node| DocumentPreviewBlock {
+            id: node.id,
+            document_id: node.document_id,
+            parent_id: node.parent_id,
+            node_type: node.node_type,
+            title: node.title,
+            text: node.text,
+            ordinal_path: node.ordinal_path,
+        })
+        .collect();
+
+    Ok(GetDocumentPreviewResponse {
+        document_id,
+        blocks,
+    })
 }
 
 #[tauri::command]

@@ -88,8 +88,8 @@ export function GraphInsights() {
         <h4>CROSS-DOCUMENT SYNTHESIS</h4>
         <p>
           {totalDocs > 1
-            ? `LLM Reasoning Agent detected structural patterns across ${totalDocs} documents.`
-            : "No cross-document synthesis."}
+            ? `${totalDocs} documents currently loaded in this project.`
+            : "One document currently loaded in this project."}
         </p>
       </section>
 

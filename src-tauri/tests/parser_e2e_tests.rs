@@ -184,6 +184,10 @@ fn test_xlsx_basic_parsing() {
     let payload = result.unwrap();
     assert_has_root_node(&payload.nodes);
     assert_has_sections(&payload.nodes);
+    assert!(
+        payload.nodes.iter().any(|node| node.node_type == "Table"),
+        "XLSX should produce typed Table nodes"
+    );
     
     // Each sheet should become a section
     let sections = count_nodes_by_type(&payload.nodes, "Section");
@@ -271,7 +275,55 @@ fn test_pptx_slide_extraction() {
             n.node_type == "Section" && (n.title.starts_with("Slide") || !n.title.is_empty())
         });
         assert!(has_slide_title, "PPTX sections should have slide titles");
+        let has_html_comment_title = payload.nodes.iter().any(|n| {
+            n.node_type == "Section" && n.title.contains("<!--")
+        });
+        assert!(
+            !has_html_comment_title,
+            "PPTX sections should not keep raw HTML comment headings"
+        );
     }
+}
+
+#[test]
+fn test_markdown_image_blocks_are_typed_as_figure() {
+    let markdown = r#"# Slide 1
+
+![chart](data:image/png;base64,abc123)
+"#;
+
+    let mut file = NamedTempFile::new().expect("temp file");
+    file.write_all(markdown.as_bytes()).expect("write markdown");
+
+    let result = native_parser::parse(file.path(), "text/markdown");
+    assert!(result.is_ok(), "Markdown should parse");
+    let payload = result.unwrap();
+    assert!(
+        payload.nodes.iter().any(|node| node.node_type == "Figure"),
+        "Image markdown blocks should be typed as Figure"
+    );
+}
+
+#[test]
+fn test_markdown_table_blocks_are_typed_as_table() {
+    let markdown = r#"# Sheet 1
+
+| Name | Score |
+| ---- | ----- |
+| A | 1 |
+| B | 2 |
+"#;
+
+    let mut file = NamedTempFile::new().expect("temp file");
+    file.write_all(markdown.as_bytes()).expect("write markdown");
+
+    let result = native_parser::parse(file.path(), "text/markdown");
+    assert!(result.is_ok(), "Markdown should parse");
+    let payload = result.unwrap();
+    assert!(
+        payload.nodes.iter().any(|node| node.node_type == "Table"),
+        "Markdown table blocks should be typed as Table"
+    );
 }
 
 // ── Image Tests ───────────────────────────────────────────────────────────────

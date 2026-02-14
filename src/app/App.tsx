@@ -7,10 +7,11 @@ import { useWorkspaceChrome } from "../features/navigation/WorkspaceChromeContex
 import { TracePane } from "../features/trace/TracePane";
 import { TreePane } from "../features/tree/TreePane";
 import {
+  deleteDocument,
   getNode,
   getProjectTree,
   getRun,
-  getTree,
+  listDocuments,
   listProjects,
   onReasoningComplete,
   onReasoningError,
@@ -54,6 +55,8 @@ export function App() {
   const {
     setProjects,
     setActiveProject,
+    setDocuments,
+    setActiveDocument,
     setTree,
     setNodeDetail,
     setTrace,
@@ -70,6 +73,8 @@ export function App() {
     useShallow((state) => ({
       setProjects: state.setProjects,
       setActiveProject: state.setActiveProject,
+      setDocuments: state.setDocuments,
+      setActiveDocument: state.setActiveDocument,
       setTree: state.setTree,
       setNodeDetail: state.setNodeDetail,
       setTrace: state.setTrace,
@@ -84,6 +89,24 @@ export function App() {
       addRecentQuery: state.addRecentQuery,
     })),
   );
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!activeProjectId) return;
+    const confirmed = window.confirm("Delete this document from the project?");
+    if (!confirmed) return;
+    try {
+      await deleteDocument(documentId);
+      const docs = await listDocuments(activeProjectId);
+      setDocuments(docs);
+      if (activeDocumentId === documentId) {
+        setActiveDocument(docs[0]?.id ?? null);
+      }
+      const nodes = await getProjectTree(activeProjectId, 6);
+      setTree(nodes);
+    } catch (error) {
+      setErrorMessage(String(error));
+    }
+  };
 
   const activeDocument = useMemo(
     () => documents.find((item) => item.id === activeDocumentId) ?? null,
@@ -104,7 +127,7 @@ export function App() {
     }).catch((error) => setErrorMessage(String(error)));
   }, [setProjects, setActiveProject, activeProjectId]);
 
-  // Load tree for active project or document
+  // Load project-wide tree for active project (always multi-document)
   useEffect(() => {
     if (!activeProjectId) {
       setTree([]);
@@ -112,18 +135,10 @@ export function App() {
     }
 
     setIndexingStatus("indexing");
-    if (activeDocumentId) {
-      // Load tree for specific document
-      void getTree(activeDocumentId, undefined, 6)
-        .then((nodes) => setTree(nodes))
-        .catch((error) => setErrorMessage(String(error)));
-    } else {
-      // Load project tree (cross-document)
-      void getProjectTree(activeProjectId, 6)
-        .then((nodes) => setTree(nodes))
-        .catch((error) => setErrorMessage(String(error)));
-    }
-  }, [activeProjectId, activeDocumentId, setTree, setIndexingStatus]);
+    void getProjectTree(activeProjectId, 6)
+      .then((nodes) => setTree(nodes))
+      .catch((error) => setErrorMessage(String(error)));
+  }, [activeProjectId, activeDocumentId, documents.length, setTree, setIndexingStatus]);
 
   useEffect(() => {
     if (!activeNodeId) {
@@ -225,6 +240,7 @@ export function App() {
           nodes={tree}
           activeNodeId={activeNodeId}
           onSelect={selectNode}
+          onDeleteDocument={handleDeleteDocument}
         />
         {centerView === "trace" ? (
           <TracePane

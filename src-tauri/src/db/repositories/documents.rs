@@ -223,14 +223,32 @@ pub async fn get_project_tree(
         )
         SELECT dn.id, dn.document_id, dn.parent_id, dn.node_type, dn.title, dn.text, dn.ordinal_path, dn.page_start, dn.page_end
         FROM doc_nodes dn
+        JOIN documents d ON d.id = dn.document_id
         JOIN tree ON dn.id = tree.id
-        ORDER BY dn.document_id, CASE WHEN dn.parent_id IS NULL THEN 0 ELSE 1 END, dn.ordinal_path
+        ORDER BY d.created_at ASC, CASE WHEN dn.parent_id IS NULL THEN 0 ELSE 1 END, dn.ordinal_path
         "#,
     )
     .bind(project_id)
     .bind(depth)
     .fetch_all(pool)
     .await?;
+    rows.into_iter().map(map_node_summary).collect()
+}
+
+pub async fn get_document_preview(pool: &SqlitePool, document_id: &str) -> AppResult<Vec<DocNodeSummary>> {
+    let _ = get_document(pool, document_id).await?;
+    let rows = sqlx::query(
+        r#"
+        SELECT id, document_id, parent_id, node_type, title, text, ordinal_path, page_start, page_end
+        FROM doc_nodes
+        WHERE document_id = ?1
+        ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, ordinal_path
+        "#,
+    )
+    .bind(document_id)
+    .fetch_all(pool)
+    .await?;
+
     rows.into_iter().map(map_node_summary).collect()
 }
 

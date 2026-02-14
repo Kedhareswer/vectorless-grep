@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
-import { depthForOrdinal, nodeTypeLabel } from "../../lib/formatters";
+import { compareOrdinalPath, nodeTypeLabel } from "../../lib/formatters";
 import type { DocNodeSummary } from "../../lib/types";
 import { useWorkspaceChrome } from "../navigation/WorkspaceChromeContext";
 import { getNodeIcon } from "./getNodeIcon";
@@ -9,6 +9,7 @@ interface TreePaneProps {
   nodes: DocNodeSummary[];
   activeNodeId: string | null;
   onSelect: (nodeId: string) => void;
+  onDeleteDocument?: (documentId: string) => void;
 }
 
 function isCollapsible(nodeType: string): boolean {
@@ -43,6 +44,7 @@ export function TreePane({
   nodes,
   activeNodeId,
   onSelect,
+  onDeleteDocument,
 }: TreePaneProps) {
   const { projects, activeProjectId, setActiveProject, createProject } = useWorkspaceChrome();
   const [creatingProject, setCreatingProject] = useState(false);
@@ -57,34 +59,59 @@ export function TreePane({
         map.set(node.parentId, list);
       }
     }
+    for (const [parentId, list] of map.entries()) {
+      map.set(
+        parentId,
+        [...list].sort((a, b) => compareOrdinalPath(a.ordinalPath, b.ordinalPath)),
+      );
+    }
     return map;
+  }, [nodes]);
+
+  const depthById = useMemo(() => {
+    const parentMap = new Map<string, string | null>();
+    for (const node of nodes) {
+      parentMap.set(node.id, node.parentId);
+    }
+    const cache = new Map<string, number>();
+    const computeDepth = (id: string): number => {
+      if (cache.has(id)) return cache.get(id) ?? 0;
+      const parentId = parentMap.get(id) ?? null;
+      const depth = parentId ? computeDepth(parentId) + 1 : 0;
+      cache.set(id, depth);
+      return depth;
+    };
+    for (const node of nodes) {
+      computeDepth(node.id);
+    }
+    return cache;
   }, [nodes]);
 
   // Build initial expanded set: top 2 depth levels
   const initialExpanded = useMemo(() => {
     const ids = new Set<string>();
     for (const node of nodes) {
-      if (depthForOrdinal(node.ordinalPath) < 2 && isCollapsible(node.nodeType)) {
+      if ((depthById.get(node.id) ?? 0) < 2 && isCollapsible(node.nodeType)) {
         ids.add(node.id);
       }
     }
     return ids;
-  }, [nodes]);
+  }, [depthById, nodes]);
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(initialExpanded);
 
   // Keep expandedIds in sync when nodes change (new document loaded)
   const [prevNodes, setPrevNodes] = useState(nodes);
-  if (nodes !== prevNodes) {
-    setPrevNodes(nodes);
-    const ids = new Set<string>();
-    for (const node of nodes) {
-      if (depthForOrdinal(node.ordinalPath) < 2 && isCollapsible(node.nodeType)) {
-        ids.add(node.id);
+    if (nodes !== prevNodes) {
+      setPrevNodes(nodes);
+      const ids = new Set<string>();
+      for (const node of nodes) {
+        if ((depthById.get(node.id) ?? 0) < 2 && isCollapsible(node.nodeType)) {
+          ids.add(node.id);
+        }
       }
+      setExpandedIds(ids);
     }
-    setExpandedIds(ids);
-  }
 
   const toggleExpand = useCallback((nodeId: string) => {
     setExpandedIds((prev) => {
@@ -119,7 +146,23 @@ export function TreePane({
     [expandedIds, parentMap],
   );
 
-  const filtered = nodes.filter((node) => !isHiddenByCollapse(node));
+  const orderedNodes = useMemo(() => {
+    const roots = nodes.filter((node) => node.parentId === null);
+    const ordered: DocNodeSummary[] = [];
+    const walk = (node: DocNodeSummary) => {
+      ordered.push(node);
+      const children = childrenMap.get(node.id) ?? [];
+      for (const child of children) {
+        walk(child);
+      }
+    };
+    for (const root of roots) {
+      walk(root);
+    }
+    return ordered;
+  }, [childrenMap, nodes]);
+
+  const filtered = orderedNodes.filter((node) => !isHiddenByCollapse(node));
 
   const hasChildren = useMemo(() => {
     const set = new Set<string>();
@@ -129,19 +172,17 @@ export function TreePane({
     return set;
   }, [nodes]);
 
-  const maxDepth = useMemo(
-    () => nodes.reduce((acc, node) => Math.max(acc, depthForOrdinal(node.ordinalPath)), 0),
-    [nodes],
-  );
-
-  const rootNode = useMemo(
-    () => nodes.find((node) => node.parentId === null) ?? null,
-    [nodes],
-  );
+  const maxDepth = useMemo(() => {
+    let depth = 0;
+    for (const value of depthById.values()) {
+      depth = Math.max(depth, value);
+    }
+    return depth;
+  }, [depthById]);
 
   const visibleNodes = useMemo(
-    () => filtered.filter((node) => node.id !== rootNode?.id),
-    [filtered, rootNode],
+    () => filtered,
+    [filtered],
   );
 
   const handleCreateProject = useCallback(async () => {
@@ -194,7 +235,7 @@ export function TreePane({
 
       <div className="tree-content">
         {visibleNodes.map((node) => {
-          const depth = depthForOrdinal(node.ordinalPath);
+          const depth = depthById.get(node.id) ?? 0;
           const collapsible = isCollapsible(node.nodeType) && hasChildren.has(node.id);
           const expanded = expandedIds.has(node.id);
           const isLast = (() => {
@@ -250,8 +291,25 @@ export function TreePane({
                   <span className="tree-node-title">
                     {node.title || `${nodeTypeLabel(node.nodeType)} ${node.ordinalPath}`}
                   </span>
+                  <span className="tree-node-meta">
+                    {nodeTypeLabel(node.nodeType)} • {node.ordinalPath}
+                  </span>
                 </span>
               </button>
+              {node.parentId === null && node.nodeType.toLowerCase() === "document" && onDeleteDocument ? (
+                <button
+                  type="button"
+                  className="tree-node-delete"
+                  aria-label={`Delete ${node.title || "document"}`}
+                  title="Delete document"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeleteDocument(node.documentId);
+                  }}
+                >
+                  DEL
+                </button>
+              ) : null}
             </div>
           );
         })}
