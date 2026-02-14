@@ -1,0 +1,89 @@
+:root {
+  /* fonts */
+  --font-sans: "Plus Jakarta Sans", "Segoe UI Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+
+  /* backgrounds — neutral charcoal dark */
+  --bg-base:    #0d0d0d;
+  --bg-0:       #111111;
+  --bg-1:       #1a1a1a;
+  --bg-2:       #222222;
+  --bg-3:       #2a2a2a;
+  --bg-card:    rgba(22, 22, 22, 0.97);
+  --bg-input:   rgba(20, 20, 20, 0.95);
+  --bg-code:    rgba(14, 14, 14, 0.97);
+  --bg-sidebar: rgba(15, 15, 15, 0.99);
+
+  /* borders — subtle white-alpha, no blue tint */
+  --line:          #2a2a2a;
+  --line-soft:     rgba(255, 255, 255, 0.07);
+  --border-pane:   rgba(255, 255, 255, 0.08);
+  --border-card:   rgba(255, 255, 255, 0.09);
+  --border-input:  rgba(255, 255, 255, 0.10);
+  --border-focus:  rgba(99, 149, 255, 0.55);
+  --border-active: rgba(99, 149, 255, 0.65);
+
+  /* text — neutral white hierarchy */
+  --text-0:       #f0f0f0;
+  --text-1:       #a0a0a0;
+  --text-2:       #6a6a6a;
+  --text-heading: #ebebeb;
+  --text-subtle:  #c8c8c8;
+  --text-link:    #6395ff;
+  --text-kicker:  #8aabff;
+  --text-code:    #7eb8ff;
+  --text-meta:    #7aa3e8;
+
+  /* accents — Tailwind blue-500 family */
+  --accent-0:           #3b82f6;
+  --accent-1:           #60a5fa;
+  --accent-2:           #93c5fd;
+  --accent-purple:      #a78bfa;
+  --accent-purple-soft: rgba(167, 139, 250, 0.5);
+
+  /* status */
+  --ok:     #32d296;
+  --warn:   #ffb454;
+  --danger: #ff5f77;
+
+  /* step dot colors */
+  --step-scan:     #32d296;
+  --step-navigate: #ffb454;
+  --step-retrieve: #a78bfa;
+
+  /* embedding visualization */
+  --embed-dot:          rgba(59, 130, 246, 0.55);
+  --embed-match:        rgba(50, 210, 150, 0.8);
+  --embed-grid-stroke:  rgba(255, 255, 255, 0.04);
+  --embed-stroke-width: 0.5;
+
+  /* graph visualization */
+  --graph-bg-dot: rgba(59, 130, 246, 0.12);
+
+  /* tree layout */
+  --tree-indent-base: 12px;
+  --tree-indent-step: 10px;
+
+  /* typography scale */
+  --font-size-xs: 9px;
+
+  /* glows */
+  --glow-accent: 0 0 12px rgba(59, 130, 246, 0.22);
+  --glow-ok:     0 0 8px rgba(50, 210, 150, 0.30);
+  --logo-glow:   rgba(147, 197, 253, 0.6);
+
+  /* radius - square design */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+
+  /* shadows */
+  --shadow-1:     0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-2:     0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 28px rgba(0, 0, 0, 0.7);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+
+  /* transitions */
+  --ease-ui:    120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-hover: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}

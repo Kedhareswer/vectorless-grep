@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(cargo check:*)",
+      "Bash(npx vite build:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(rustup component add:*)",
+      "WebFetch(domain:crates.io)",
+      "Bash(python -c:*)",
+      "Bash(del \"c:\\\\Users\\\\mbkhn\\\\Downloads\\\\Inspired\\\\vectorless-grep\\\\src-tauri\\\\src\\\\sidecar\\\\docling_client.rs\")",
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\mbkhn\\\\Downloads\\\\Inspired\\\\vectorless-grep\\\\sidecar\")",
+      "Bash(Write-Host \"Done\")",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}

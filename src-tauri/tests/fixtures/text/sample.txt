@@ -1,0 +1,19 @@
+Plain Text Document
+
+This is a plain text file without any special formatting or markup.
+
+It contains multiple paragraphs separated by blank lines.
+
+The parser should detect headings based on heuristics like short lines, capitalization, and lack of sentence-ending punctuation.
+
+SECTION ONE
+
+This section has an all-caps heading which should be detected by the heading heuristics.
+
+The content here is regular paragraph text that should be chunked appropriately.
+
+SECTION TWO
+
+Another section with similar structure and content for testing purposes.
+
+This helps validate that the parser correctly identifies multiple sections in plain text files.

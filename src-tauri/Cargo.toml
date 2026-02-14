@@ -1,0 +1,56 @@
+[package]
+name = "vectorless"
+version = "0.1.0"
+description = "Vectorless reasoning-based RAG desktop application"
+authors = ["Vectorless Team"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "vectorless_lib"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "vectorless"
+path = "src/main.rs"
+test = false
+bench = false
+
+[build-dependencies]
+tauri-build = { version = "2.5.4", features = [] }
+
+[dependencies]
+calamine = { version = "0.22", features = ["dates"] }
+chrono = { version = "0.4.42", features = ["serde"] }
+docx-rs = "0.4"
+futures = "0.3.31"
+image = "0.25"
+pdf-extract = "0.10"
+pptx-to-md = "0.4"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+keyring = { version = "3.6.3", features = ["windows-native"] }
+log = "0.4.28"
+reqwest = { version = "0.12.24", features = ["json", "rustls-tls"], default-features = false }
+roxmltree = "0.20.0"
+schemars = "1.1.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls", "uuid", "chrono", "json", "migrate"] }
+tauri = { version = "2.10.0", features = ["tray-icon"] }
+tauri-plugin-dialog = "2.4.0"
+tauri-plugin-log = "2.7.1"
+thiserror = "2.0.17"
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "time", "sync", "io-util"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+uuid = { version = "1.18.1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+tempfile = "3.23.0"
+
+[patch.crates-io]
+tao = { path = "vendor/tao" }
