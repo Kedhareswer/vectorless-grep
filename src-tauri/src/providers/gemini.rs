@@ -26,6 +26,22 @@ pub struct GeminiOutput {
     pub estimated_cost_usd: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeminiPlannerStep {
+    #[serde(alias = "step_type")]
+    pub step_type: String,
+    pub objective: String,
+    #[serde(default)]
+    pub reasoning: String,
+    #[serde(default = "default_planner_decision")]
+    pub decision: String,
+}
+
+fn default_planner_decision() -> String {
+    "continue".to_string()
+}
+
 impl GeminiClient {
     pub fn new(model: impl Into<String>) -> AppResult<Self> {
         let http = reqwest::Client::builder()
@@ -147,5 +163,81 @@ impl GeminiClient {
             token_usage,
             estimated_cost_usd,
         })
+    }
+
+    pub async fn generate_plan_step(
+        &self,
+        api_key: &str,
+        prompt: &str,
+    ) -> AppResult<GeminiPlannerStep> {
+        let endpoint = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, api_key
+        );
+        let payload = serde_json::json!({
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1,
+                "responseMimeType": "application/json"
+            }
+        });
+
+        let response = self
+            .http
+            .post(endpoint)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|err| {
+                if err.is_timeout() {
+                    AppError::ProviderTimeout
+                } else {
+                    AppError::Network(err.to_string())
+                }
+            })?;
+
+        match response.status() {
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => return Err(AppError::ProviderAuth),
+            StatusCode::TOO_MANY_REQUESTS => return Err(AppError::ProviderRateLimited),
+            status if !status.is_success() => {
+                let body = response.text().await.unwrap_or_default();
+                return Err(AppError::ProviderInvalidResponse(format!(
+                    "status {status} body {body}"
+                )));
+            }
+            _ => {}
+        }
+
+        let body: Value = response
+            .json()
+            .await
+            .map_err(|err| AppError::ProviderInvalidResponse(err.to_string()))?;
+        let text = body
+            .get("candidates")
+            .and_then(Value::as_array)
+            .and_then(|items: &Vec<Value>| items.first())
+            .and_then(|item: &Value| item.get("content"))
+            .and_then(|content: &Value| content.get("parts"))
+            .and_then(Value::as_array)
+            .and_then(|parts: &Vec<Value>| parts.first())
+            .and_then(|part: &Value| part.get("text"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError::ProviderInvalidResponse("missing text candidate".to_string()))?;
+
+        let parsed: GeminiPlannerStep = serde_json::from_str(text)
+            .map_err(|err| AppError::ProviderInvalidResponse(format!("planner output not JSON: {err}")))?;
+
+        if parsed.step_type.trim().is_empty() || parsed.objective.trim().is_empty() {
+            return Err(AppError::ProviderInvalidResponse(
+                "planner output missing required fields".to_string(),
+            ));
+        }
+
+        Ok(parsed)
     }
 }

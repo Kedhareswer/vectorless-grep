@@ -23,6 +23,8 @@ pub enum AppError {
     ProviderInvalidResponse(String),
     #[error("network error: {0}")]
     Network(String),
+    #[error("quality gate failed: {0}")]
+    QualityGateFailed(String),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -52,6 +54,7 @@ impl AppError {
             Self::ProviderTimeout => "PROVIDER_TIMEOUT",
             Self::ProviderInvalidResponse(_) => "PROVIDER_INVALID_RESPONSE",
             Self::Network(_) => "NETWORK_ERROR",
+            Self::QualityGateFailed(_) => "QUALITY_GATE_FAILED",
             Self::Internal(_) => "INTERNAL_ERROR",
         }
     }

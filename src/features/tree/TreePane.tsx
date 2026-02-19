@@ -307,7 +307,23 @@ export function TreePane({
                     onDeleteDocument(node.documentId);
                   }}
                 >
-                  DEL
+                  <svg
+                    className="tree-node-delete-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4.75a1.75 1.75 0 0 1 1.75-1.75h4.5A1.75 1.75 0 0 1 16 4.75V6" />
+                    <path d="M19 6l-1 13.25A2 2 0 0 1 16 21H8a2 2 0 0 1-2-1.75L5 6" />
+                    <path d="M10 10v7" />
+                    <path d="M14 10v7" />
+                  </svg>
                 </button>
               ) : null}
             </div>

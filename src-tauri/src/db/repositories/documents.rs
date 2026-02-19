@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashSet, path::Path};
 
 use chrono::{DateTime, Utc};
 use sqlx::{QueryBuilder, Row, SqlitePool};
@@ -233,6 +233,72 @@ pub async fn get_project_tree(
     .fetch_all(pool)
     .await?;
     rows.into_iter().map(map_node_summary).collect()
+}
+
+pub async fn search_project_nodes(
+    pool: &SqlitePool,
+    project_id: &str,
+    focus_document_id: Option<&str>,
+    query: &str,
+    limit: usize,
+) -> AppResult<Vec<DocNodeSummary>> {
+    let cap = (limit.max(1).min(200)) as i64;
+    let Some(match_query) = fts_match_query(query) else {
+        return Ok(vec![]);
+    };
+
+    let rows = sqlx::query(
+        r#"
+        SELECT dn.id, dn.document_id, dn.parent_id, dn.node_type, dn.title, dn.text, dn.ordinal_path, dn.page_start, dn.page_end
+        FROM doc_nodes_fts
+        JOIN doc_nodes dn ON dn.id = doc_nodes_fts.node_id
+        JOIN documents d ON d.id = dn.document_id
+        WHERE d.project_id = ?1
+          AND (?2 IS NULL OR dn.document_id = ?2)
+          AND doc_nodes_fts MATCH ?3
+        ORDER BY bm25(doc_nodes_fts, 1.2, 1.0) ASC,
+                 CASE dn.node_type WHEN 'Section' THEN 0 WHEN 'Subsection' THEN 1 ELSE 2 END,
+                 dn.ordinal_path
+        LIMIT ?4
+        "#,
+    )
+    .bind(project_id)
+    .bind(focus_document_id)
+    .bind(&match_query)
+    .bind(cap)
+    .fetch_all(pool)
+    .await?;
+
+    if !rows.is_empty() {
+        return rows.into_iter().map(map_node_summary).collect();
+    }
+
+    let Some(like_term) = normalized_terms(query).into_iter().next() else {
+        return Ok(vec![]);
+    };
+    let like_pattern = format!("%{like_term}%");
+
+    let fallback_rows = sqlx::query(
+        r#"
+        SELECT dn.id, dn.document_id, dn.parent_id, dn.node_type, dn.title, dn.text, dn.ordinal_path, dn.page_start, dn.page_end
+        FROM doc_nodes dn
+        JOIN documents d ON d.id = dn.document_id
+        WHERE d.project_id = ?1
+          AND (?2 IS NULL OR dn.document_id = ?2)
+          AND (LOWER(dn.title) LIKE ?3 OR LOWER(dn.text) LIKE ?3)
+        ORDER BY CASE dn.node_type WHEN 'Section' THEN 0 WHEN 'Subsection' THEN 1 ELSE 2 END,
+                 dn.ordinal_path
+        LIMIT ?4
+        "#,
+    )
+    .bind(project_id)
+    .bind(focus_document_id)
+    .bind(like_pattern)
+    .bind(cap)
+    .fetch_all(pool)
+    .await?;
+
+    fallback_rows.into_iter().map(map_node_summary).collect()
 }
 
 pub async fn get_document_preview(pool: &SqlitePool, document_id: &str) -> AppResult<Vec<DocNodeSummary>> {
@@ -477,4 +543,70 @@ fn map_node_detail(row: sqlx::sqlite::SqliteRow) -> AppResult<DocNodeDetail> {
         bbox_json: serde_json::from_str(&bbox_json).unwrap_or_else(|_| serde_json::json!({})),
         metadata_json: serde_json::from_str(&metadata_json).unwrap_or_else(|_| serde_json::json!({})),
     })
+}
+
+fn fts_match_query(query: &str) -> Option<String> {
+    let terms = normalized_terms(query);
+    if terms.is_empty() {
+        return None;
+    }
+    Some(
+        terms
+            .iter()
+            .map(|term| format!("{term}*"))
+            .collect::<Vec<_>>()
+            .join(" OR "),
+    )
+}
+
+fn normalized_terms(query: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut terms = Vec::new();
+
+    for token in query
+        .split(|value: char| !value.is_ascii_alphanumeric())
+        .map(|value| value.trim().to_ascii_lowercase())
+    {
+        if token.len() < 2 || is_stopword(&token) {
+            continue;
+        }
+        if seen.insert(token.clone()) {
+            terms.push(token);
+        }
+    }
+
+    terms
+}
+
+fn is_stopword(term: &str) -> bool {
+    matches!(
+        term,
+        "a"
+            | "an"
+            | "and"
+            | "are"
+            | "about"
+            | "as"
+            | "at"
+            | "be"
+            | "by"
+            | "do"
+            | "for"
+            | "from"
+            | "how"
+            | "in"
+            | "is"
+            | "it"
+            | "of"
+            | "on"
+            | "or"
+            | "that"
+            | "the"
+            | "these"
+            | "this"
+            | "to"
+            | "what"
+            | "which"
+            | "with"
+    )
 }

@@ -91,11 +91,19 @@ const nodes: DocNodeSummary[] = [
   },
 ];
 
-function renderTree(activeNodeId: string | null = null) {
+function renderTree(
+  activeNodeId: string | null = null,
+  onDeleteDocument?: (documentId: string) => void,
+) {
   const onSelect = vi.fn();
   render(
     <WorkspaceChromeProvider value={contextValue}>
-      <TreePane nodes={nodes} activeNodeId={activeNodeId} onSelect={onSelect} />
+      <TreePane
+        nodes={nodes}
+        activeNodeId={activeNodeId}
+        onSelect={onSelect}
+        onDeleteDocument={onDeleteDocument}
+      />
     </WorkspaceChromeProvider>,
   );
   return { onSelect };
@@ -133,5 +141,17 @@ describe("TreePane", () => {
 
     const activeNode = screen.getByText("Figure 2");
     expect(activeNode.closest(".tree-row")).toHaveClass("active");
+  });
+
+  it("shows icon-only delete buttons for document roots", () => {
+    const onDeleteDocument = vi.fn();
+    renderTree(null, onDeleteDocument);
+
+    const deleteButton = screen.getByRole("button", { name: "Delete Annual_Report_2023.pdf" });
+    expect(deleteButton).toBeInTheDocument();
+    expect(screen.queryByText("DEL")).not.toBeInTheDocument();
+
+    fireEvent.click(deleteButton);
+    expect(onDeleteDocument).toHaveBeenCalledWith("doc-1");
   });
 });

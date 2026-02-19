@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::providers::gemini::GeminiPlannerStep;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum StepType {
@@ -169,9 +171,135 @@ impl Planner {
                 },
                 PlannedStep {
                     step_type: StepType::SelfCheck,
-                    objective: "Measure confidence and decide if re-traversal is needed".to_string(),
+                    objective: "Measure confidence and decide if re-traversal is needed"
+                        .to_string(),
                 },
             ],
         }
+    }
+
+    pub fn next_steps_from_model(
+        &self,
+        input: &PlannerInput,
+        model_step: &GeminiPlannerStep,
+    ) -> Option<PlannedSequence> {
+        if input.step_count >= self.config.max_steps {
+            return Some(PlannedSequence {
+                decision: PlannerDecision::Stop,
+                steps: vec![],
+            });
+        }
+
+        let decision = parse_decision(&model_step.decision);
+        if matches!(decision, PlannerDecision::Stop) {
+            if !input.has_evidence {
+                return Some(PlannedSequence {
+                    decision: PlannerDecision::Continue,
+                    steps: vec![
+                        PlannedStep {
+                            step_type: StepType::ScanRoot,
+                            objective: "Need evidence before finishing".to_string(),
+                        },
+                        PlannedStep {
+                            step_type: StepType::SelectSections,
+                            objective: "Find relevant candidate sections".to_string(),
+                        },
+                    ],
+                });
+            }
+            return Some(PlannedSequence {
+                decision,
+                steps: vec![],
+            });
+        }
+
+        if matches!(decision, PlannerDecision::Backtrack) {
+            return Some(PlannedSequence {
+                decision,
+                steps: vec![
+                    PlannedStep {
+                        step_type: StepType::SelectSections,
+                        objective: model_step.objective.clone(),
+                    },
+                    PlannedStep {
+                        step_type: StepType::DrillDown,
+                        objective: "Re-check alternate branches".to_string(),
+                    },
+                    PlannedStep {
+                        step_type: StepType::ExtractEvidence,
+                        objective: "Collect stronger supporting evidence".to_string(),
+                    },
+                    PlannedStep {
+                        step_type: StepType::Synthesize,
+                        objective: "Regenerate answer from revised evidence".to_string(),
+                    },
+                    PlannedStep {
+                        step_type: StepType::SelfCheck,
+                        objective: "Validate revised answer quality".to_string(),
+                    },
+                ],
+            });
+        }
+
+        let steps = match parse_step_kind(&model_step.step_type)? {
+            StepType::ScanRoot => vec![
+                PlannedStep {
+                    step_type: StepType::ScanRoot,
+                    objective: model_step.objective.clone(),
+                },
+                PlannedStep {
+                    step_type: StepType::SelectSections,
+                    objective: "Select high-signal sections".to_string(),
+                },
+            ],
+            StepType::DrillDown => vec![
+                PlannedStep {
+                    step_type: StepType::DrillDown,
+                    objective: model_step.objective.clone(),
+                },
+                PlannedStep {
+                    step_type: StepType::ExtractEvidence,
+                    objective: "Extract concrete supporting claims".to_string(),
+                },
+            ],
+            StepType::Synthesize => vec![PlannedStep {
+                step_type: StepType::Synthesize,
+                objective: model_step.objective.clone(),
+            }],
+            StepType::SelfCheck => vec![PlannedStep {
+                step_type: StepType::SelfCheck,
+                objective: model_step.objective.clone(),
+            }],
+            StepType::SelectSections | StepType::ExtractEvidence => vec![PlannedStep {
+                step_type: parse_step_kind(&model_step.step_type)?,
+                objective: model_step.objective.clone(),
+            }],
+        };
+
+        Some(PlannedSequence {
+            decision: PlannerDecision::Continue,
+            steps,
+        })
+    }
+}
+
+fn parse_decision(raw: &str) -> PlannerDecision {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "stop" | "finish" | "done" => PlannerDecision::Stop,
+        "backtrack" | "revise" | "retry" => PlannerDecision::Backtrack,
+        _ => PlannerDecision::Continue,
+    }
+}
+
+fn parse_step_kind(raw: &str) -> Option<StepType> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "search" | "scan_root" => Some(StepType::ScanRoot),
+        "select_sections" => Some(StepType::SelectSections),
+        "inspect" | "drill_down" => Some(StepType::DrillDown),
+        "extract_evidence" => Some(StepType::ExtractEvidence),
+        "synthesize" => Some(StepType::Synthesize),
+        "self_check" | "validate" => Some(StepType::SelfCheck),
+        "finish" => Some(StepType::SelfCheck),
+        _ => None,
     }
 }

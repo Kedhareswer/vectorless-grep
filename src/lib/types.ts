@@ -63,11 +63,14 @@ export interface ReasoningRun {
   documentId: string | null;
   query: string;
   status: "running" | "completed" | "failed";
+  phase?: "planning" | "retrieval" | "synthesis" | "validation" | "completed" | "failed";
   startedAt: string;
   endedAt: string | null;
   totalLatencyMs: number | null;
   tokenUsageJson: Record<string, unknown>;
   costUsd: number;
+  qualityJson?: Record<string, unknown>;
+  plannerTraceJson?: unknown[];
 }
 
 export interface ReasoningStep {

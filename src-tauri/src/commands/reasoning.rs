@@ -7,6 +7,7 @@ use crate::{
         types::{Provider, ReasoningCompleteEvent, ReasoningErrorEvent, RunReasoningQueryResponse},
     },
     db::repositories::reasoning,
+    reasoner::query_scope::requires_project_scope,
     security::keyring,
     AppState,
 };
@@ -26,11 +27,16 @@ pub async fn run_reasoning_query(
 
     let run_id = Uuid::new_v4().to_string();
     let api_key = keyring::get_provider_key(Provider::Gemini)?;
+    let effective_focus_document_id = if requires_project_scope(&query) {
+        None
+    } else {
+        focus_document_id.clone()
+    };
     let db = state.db.clone();
     let executor = state.executor.clone();
     let run_id_for_task = run_id.clone();
     let project_id_for_task = project_id.clone();
-    let focus_document_id_for_task = focus_document_id.clone();
+    let focus_document_id_for_task = effective_focus_document_id.clone();
     let query_for_task = query.clone();
     let app_for_task = app.clone();
 

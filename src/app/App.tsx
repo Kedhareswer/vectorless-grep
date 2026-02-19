@@ -189,13 +189,17 @@ export function App() {
         return;
       }
       setPending(false);
-      setErrorMessage(event.message);
+      const message = event.code === "QUALITY_GATE_FAILED"
+        ? `Answer withheld by quality policy: ${event.message}`
+        : event.message;
+      setErrorMessage(message);
       setCurrentRun({
         id: event.runId,
         projectId: activeProjectId ?? "",
         documentId: activeDocumentId,
         query: queryText,
         status: "failed",
+        phase: "failed",
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
         totalLatencyMs: null,
@@ -275,9 +279,7 @@ export function App() {
             node={nodeDetail}
             confidence={activeTraceConfidence}
             onSelectNode={selectNode}
-            trace={trace}
             tree={tree}
-            queryText={queryText}
           />
         </section>
       </main>

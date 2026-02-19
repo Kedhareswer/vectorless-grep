@@ -9,7 +9,6 @@ import type {
   DocNodeSummary,
   DocumentPreviewBlock,
   DocumentSummary,
-  ReasoningStep,
 } from "../../lib/types";
 
 interface DocumentPaneProps {
@@ -17,9 +16,7 @@ interface DocumentPaneProps {
   node: DocNodeDetail | null;
   confidence: number;
   onSelectNode: (nodeId: string) => void;
-  trace: ReasoningStep[];
   tree: DocNodeSummary[];
-  queryText: string;
 }
 
 interface DocumentRenderBlock extends DocumentPreviewBlock {
@@ -111,44 +108,28 @@ export function DocumentPaneNew({
   node,
   confidence,
   onSelectNode,
-  trace,
   tree,
 }: DocumentPaneProps) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
   const [previewBlocks, setPreviewBlocks] = useState<DocumentPreviewBlock[]>([]);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const targetDocumentId = node?.documentId ?? document?.id ?? null;
 
   useEffect(() => {
     if (!targetDocumentId) {
-      setPreviewDocumentId(null);
-      setPreviewBlocks([]);
-      setPreviewError(null);
-      setPreviewLoading(false);
       return;
     }
 
     let cancelled = false;
-    setPreviewDocumentId(targetDocumentId);
-    setPreviewLoading(true);
-    setPreviewError(null);
 
     void getDocumentPreview(targetDocumentId)
       .then((blocks) => {
         if (cancelled) return;
         setPreviewBlocks(blocks);
       })
-      .catch((error) => {
+      .catch(() => {
         if (cancelled) return;
         setPreviewBlocks([]);
-        setPreviewError(String(error));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setPreviewLoading(false);
       });
 
     return () => {
@@ -160,14 +141,13 @@ export function DocumentPaneNew({
   const selectedNodeIsVisible = node ? renderBlocks.some((block) => block.id === node.id) : false;
 
   useEffect(() => {
-    if (!node?.id || !contentRef.current || previewDocumentId !== node.documentId) return;
+    if (!node?.id || !contentRef.current || targetDocumentId !== node.documentId) return;
     const element = contentRef.current.querySelector<HTMLElement>(`[data-node-id="${node.id}"]`);
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [node?.id, node?.documentId, previewDocumentId, renderBlocks]);
+  }, [node?.id, node?.documentId, targetDocumentId, renderBlocks]);
 
-  const relevantSteps = node ? trace.filter((step) => step.nodeRefs.includes(node.id)) : [];
   const parent = node?.parentId ? tree.find((item) => item.id === node.parentId) ?? null : null;
   const childCount = parent ? tree.filter((item) => item.parentId === parent.id).length : 0;
 
@@ -188,17 +168,11 @@ export function DocumentPaneNew({
             <div className="preview-state">Select a node from the tree to load a document preview.</div>
           )}
 
-          {targetDocumentId && previewLoading && <div className="preview-state">Loading full preview...</div>}
-
-          {targetDocumentId && !previewLoading && previewError && (
-            <div className="preview-state">Preview failed to load: {previewError}</div>
-          )}
-
-          {targetDocumentId && !previewLoading && !previewError && renderBlocks.length === 0 && (
+          {targetDocumentId && renderBlocks.length === 0 && (
             <div className="preview-state">No preview blocks available for this document.</div>
           )}
 
-          {targetDocumentId && !previewLoading && !previewError && renderBlocks.length > 0 && (
+          {targetDocumentId && renderBlocks.length > 0 && (
             <section className="doc-reader-flow" aria-label="Document preview flow">
               {renderBlocks.map((block) => {
                 const isActive = node?.id === block.id;
@@ -259,10 +233,10 @@ export function DocumentPaneNew({
                             remarkPlugins={[remarkGfm]}
                             urlTransform={markdownUrlTransform}
                             components={{
-                              a: ({ node: _node, ...props }) => (
+                              a: ({ ...props }) => (
                                 <a {...props} target="_blank" rel="noreferrer noopener" />
                               ),
-                              img: ({ node: _node, alt, ...props }) => (
+                              img: ({ alt, ...props }) => (
                                 <img {...props} alt={alt ?? "Document image"} loading="lazy" />
                               ),
                             }}
@@ -278,7 +252,7 @@ export function DocumentPaneNew({
             </section>
           )}
 
-          {node && !selectedNodeIsVisible && !previewLoading && !previewError && (
+          {node && !selectedNodeIsVisible && (
             <div className="preview-state">Selected node is outside the loaded preview blocks for this document.</div>
           )}
 
@@ -296,30 +270,6 @@ export function DocumentPaneNew({
                   {node.text || "No text in selected node."}
                 </ReactMarkdown>
               </div>
-            </section>
-          )}
-
-          {relevantSteps.length > 0 && (
-            <section className="reasoning-context">
-              <h4>REASONING CONTEXT</h4>
-              {relevantSteps.map((step) => (
-                <div key={`${step.runId}-${step.idx}`} className="reasoning-step">
-                  <div className="step-meta">
-                    <span className="step-type">
-                      STEP {String(step.idx).padStart(2, "0")} • {step.stepType.replaceAll("_", " ")}
-                    </span>
-                    <span className="step-confidence">{Math.round(step.confidence * 100)}%</span>
-                  </div>
-                  <p className="step-thought">
-                    <strong>Thought:</strong> {step.thought}
-                  </p>
-                  {step.observation && (
-                    <p className="step-observation">
-                      <strong>Observation:</strong> {step.observation}
-                    </p>
-                  )}
-                </div>
-              ))}
             </section>
           )}
 

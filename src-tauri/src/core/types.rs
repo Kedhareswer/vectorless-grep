@@ -183,6 +183,39 @@ pub enum RunStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RunPhase {
+    Planning,
+    Retrieval,
+    Synthesis,
+    Validation,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QualityMetrics {
+    pub overall: f64,
+    pub query_alignment: f64,
+    pub citation_coverage: f64,
+    pub cross_document_coverage: f64,
+    pub grounded: bool,
+}
+
+impl Default for QualityMetrics {
+    fn default() -> Self {
+        Self {
+            overall: 0.0,
+            query_alignment: 0.0,
+            citation_coverage: 0.0,
+            cross_document_coverage: 0.0,
+            grounded: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReasoningRun {
@@ -191,11 +224,14 @@ pub struct ReasoningRun {
     pub document_id: Option<String>,
     pub query: String,
     pub status: RunStatus,
+    pub phase: RunPhase,
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
     pub total_latency_ms: Option<i64>,
     pub token_usage_json: Value,
     pub cost_usd: f64,
+    pub quality_json: Value,
+    pub planner_trace_json: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -134,11 +134,11 @@ describe("TracePane", () => {
       queryText: "typed but not run",
     });
 
-    expect(screen.queryByRole("button", { name: "Re-run Trace" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Re-run Workflow" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Download Trace" })).not.toBeInTheDocument();
   });
 
-  it("renders timeline and actions when run data exists", () => {
+  it("renders workflow and actions when run data exists", () => {
     renderTrace({
       documents: [
         {
@@ -156,8 +156,9 @@ describe("TracePane", () => {
       steps,
     });
 
+    expect(screen.getByText("Reasoning Workflow")).toBeInTheDocument();
     expect(screen.getByText("STEP 01")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Re-run Trace" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Re-run Workflow" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download Trace" })).toBeInTheDocument();
   });
 });

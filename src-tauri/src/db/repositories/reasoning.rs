@@ -3,7 +3,7 @@ use sqlx::{Row, SqlitePool};
 
 use crate::core::{
     errors::{AppError, AppResult},
-    types::{AnswerRecord, GetRunResponse, ReasoningRun, ReasoningStep, RunStatus},
+    types::{AnswerRecord, GetRunResponse, ReasoningRun, ReasoningStep, RunPhase, RunStatus},
 };
 
 #[derive(Debug, Clone)]
@@ -47,6 +47,21 @@ pub async fn create_run(
     Ok(())
 }
 
+pub async fn update_run_phase(pool: &SqlitePool, run_id: &str, phase: &str) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        UPDATE reasoning_runs
+        SET phase = ?2
+        WHERE id = ?1
+        "#,
+    )
+    .bind(run_id)
+    .bind(phase)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn add_step(pool: &SqlitePool, step: NewStep<'_>) -> AppResult<()> {
     sqlx::query(
         r#"
@@ -83,16 +98,21 @@ pub async fn complete_run(
     citations: Vec<String>,
     confidence: f64,
     grounded: bool,
+    quality_json: serde_json::Value,
+    planner_trace_json: serde_json::Value,
 ) -> AppResult<()> {
     let mut tx = pool.begin().await?;
     sqlx::query(
         r#"
         UPDATE reasoning_runs
         SET status = 'completed',
+            phase = 'completed',
             ended_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             total_latency_ms = ?2,
             token_usage_json = ?3,
-            cost_usd = ?4
+            cost_usd = ?4,
+            quality_json = ?5,
+            planner_trace_json = ?6
         WHERE id = ?1
         "#,
     )
@@ -100,6 +120,8 @@ pub async fn complete_run(
     .bind(total_latency_ms)
     .bind(token_usage_json.to_string())
     .bind(cost_usd)
+    .bind(quality_json.to_string())
+    .bind(planner_trace_json.to_string())
     .execute(&mut *tx)
     .await?;
     sqlx::query(
@@ -127,6 +149,7 @@ pub async fn fail_run(pool: &SqlitePool, run_id: &str) -> AppResult<()> {
         r#"
         UPDATE reasoning_runs
         SET status = 'failed',
+            phase = 'failed',
             ended_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         WHERE id = ?1
         "#,
@@ -140,7 +163,7 @@ pub async fn fail_run(pool: &SqlitePool, run_id: &str) -> AppResult<()> {
 pub async fn get_run(pool: &SqlitePool, run_id: &str) -> AppResult<GetRunResponse> {
     let run_row = sqlx::query(
         r#"
-        SELECT id, project_id, document_id, query, status, started_at, ended_at, total_latency_ms, token_usage_json, cost_usd
+        SELECT id, project_id, document_id, query, status, phase, started_at, ended_at, total_latency_ms, token_usage_json, cost_usd, quality_json, planner_trace_json
         FROM reasoning_runs
         WHERE id = ?1
         "#,
@@ -151,9 +174,12 @@ pub async fn get_run(pool: &SqlitePool, run_id: &str) -> AppResult<GetRunRespons
     .ok_or_else(|| AppError::NotFound(format!("run {run_id}")))?;
 
     let status_raw: String = run_row.try_get("status")?;
+    let phase_raw: String = run_row.try_get("phase")?;
     let started_at: String = run_row.try_get("started_at")?;
     let ended_at: Option<String> = run_row.try_get("ended_at")?;
     let token_usage_raw: String = run_row.try_get("token_usage_json")?;
+    let quality_raw: String = run_row.try_get("quality_json")?;
+    let planner_trace_raw: String = run_row.try_get("planner_trace_json")?;
     let run = ReasoningRun {
         id: run_row.try_get("id")?,
         project_id: run_row.try_get("project_id")?,
@@ -164,12 +190,16 @@ pub async fn get_run(pool: &SqlitePool, run_id: &str) -> AppResult<GetRunRespons
             "failed" => RunStatus::Failed,
             _ => RunStatus::Running,
         },
+        phase: parse_phase(&phase_raw),
         started_at: parse_timestamp(started_at)?,
         ended_at: ended_at.map(parse_timestamp).transpose()?,
         total_latency_ms: run_row.try_get("total_latency_ms")?,
         token_usage_json: serde_json::from_str(&token_usage_raw)
             .unwrap_or_else(|_| serde_json::json!({})),
         cost_usd: run_row.try_get("cost_usd")?,
+        quality_json: serde_json::from_str(&quality_raw).unwrap_or_else(|_| serde_json::json!({})),
+        planner_trace_json: serde_json::from_str(&planner_trace_raw)
+            .unwrap_or_else(|_| serde_json::json!([])),
     };
 
     let step_rows = sqlx::query(
@@ -219,4 +249,16 @@ pub async fn get_run(pool: &SqlitePool, run_id: &str) -> AppResult<GetRunRespons
     .transpose()?;
 
     Ok(GetRunResponse { run, steps, answer })
+}
+
+fn parse_phase(raw: &str) -> RunPhase {
+    match raw {
+        "planning" => RunPhase::Planning,
+        "retrieval" => RunPhase::Retrieval,
+        "synthesis" => RunPhase::Synthesis,
+        "validation" => RunPhase::Validation,
+        "completed" => RunPhase::Completed,
+        "failed" => RunPhase::Failed,
+        _ => RunPhase::Planning,
+    }
 }

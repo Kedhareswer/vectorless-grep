@@ -242,3 +242,121 @@ async fn graph_layout_deleted_with_document_cascade() {
         .expect("load graph layout");
     assert!(loaded.is_empty());
 }
+
+#[tokio::test]
+async fn search_project_nodes_uses_fts_and_document_scope() {
+    let db = Database::in_memory().await.expect("db should initialize");
+
+    documents::insert_document(
+        db.pool(),
+        "doc-search-1",
+        "project-default",
+        "Architecture.md",
+        "text/markdown",
+        "checksum-search-1",
+        1,
+    )
+    .await
+    .expect("insert doc1");
+
+    documents::insert_document(
+        db.pool(),
+        "doc-search-2",
+        "project-default",
+        "Roadmap.md",
+        "text/markdown",
+        "checksum-search-2",
+        1,
+    )
+    .await
+    .expect("insert doc2");
+
+    let nodes = vec![
+        SidecarNode {
+            id: "root-search-1".to_string(),
+            parent_id: None,
+            node_type: "Document".to_string(),
+            title: "Architecture".to_string(),
+            text: "".to_string(),
+            page_start: Some(1),
+            page_end: Some(1),
+            ordinal_path: "root".to_string(),
+            bbox: serde_json::json!({}),
+            metadata: serde_json::json!({}),
+        },
+        SidecarNode {
+            id: "p-search-1".to_string(),
+            parent_id: Some("root-search-1".to_string()),
+            node_type: "Paragraph".to_string(),
+            title: "Architecture Summary".to_string(),
+            text: "This file describes encoder blocks, decoder layers, and training objectives."
+                .to_string(),
+            page_start: Some(1),
+            page_end: Some(1),
+            ordinal_path: "1.1".to_string(),
+            bbox: serde_json::json!({}),
+            metadata: serde_json::json!({}),
+        },
+        SidecarNode {
+            id: "root-search-2".to_string(),
+            parent_id: None,
+            node_type: "Document".to_string(),
+            title: "Roadmap".to_string(),
+            text: "".to_string(),
+            page_start: Some(1),
+            page_end: Some(1),
+            ordinal_path: "root".to_string(),
+            bbox: serde_json::json!({}),
+            metadata: serde_json::json!({}),
+        },
+        SidecarNode {
+            id: "p-search-2".to_string(),
+            parent_id: Some("root-search-2".to_string()),
+            node_type: "Paragraph".to_string(),
+            title: "Launch Plan".to_string(),
+            text: "This file contains release timeline and hiring plan.".to_string(),
+            page_start: Some(1),
+            page_end: Some(1),
+            ordinal_path: "1.1".to_string(),
+            bbox: serde_json::json!({}),
+            metadata: serde_json::json!({}),
+        },
+    ];
+
+    documents::insert_nodes(db.pool(), "doc-search-1", &nodes[0..2])
+        .await
+        .expect("insert doc1 nodes");
+    documents::insert_nodes(db.pool(), "doc-search-2", &nodes[2..4])
+        .await
+        .expect("insert doc2 nodes");
+
+    let project_results = documents::search_project_nodes(
+        db.pool(),
+        "project-default",
+        None,
+        "encoder decoder architecture",
+        8,
+    )
+    .await
+    .expect("search project nodes");
+
+    assert!(
+        project_results.iter().any(|node| node.id == "p-search-1"),
+        "expected architecture node to be returned"
+    );
+
+    let scoped_results = documents::search_project_nodes(
+        db.pool(),
+        "project-default",
+        Some("doc-search-2"),
+        "encoder decoder architecture",
+        8,
+    )
+    .await
+    .expect("search scoped nodes");
+
+    assert!(
+        scoped_results.iter().all(|node| node.document_id == "doc-search-2"),
+        "scoped search should return only nodes from focused document"
+    );
+}
